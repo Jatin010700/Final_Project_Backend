@@ -2,9 +2,11 @@
 const express = require('express');
 const knex = require('knex');
 const bcrypt = require('bcrypt');
+const cors = require('cors')
 
-const app = express();
+
 const port = 5000
+const app = express();
 
 // Initialize Knex with PostgreSQL database configuration
 const db = knex({
@@ -23,6 +25,19 @@ app.use(express.json());
 // app.all('*', (req, res) => {
 //   res.send("<h1>404 Page not found</h1>") } )
 // Register route
+app.use(cors());
+app.use(function (req, res, next) {
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header(
+    "Access-Control-Allow-Methods",
+    "GET, HEAD, OPTIONS, POST,PUT, DELETE"
+  );
+  res.header(
+    "Access-Control-Allow-Headers",
+    "Origin, X-Requested-With, Content-Type, Accept, Authorization"
+  );
+  next()
+})
 app.post('/register', async (req, res) => {
   const { firstName, lastName, email, username, password } = req.body;
 console.log(firstName)
