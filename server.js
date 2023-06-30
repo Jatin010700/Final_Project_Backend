@@ -21,9 +21,7 @@ const db = knex({
 
 // Middleware to parse JSON body
 app.use(express.json());
-// app.use(express.static('public'));
-// app.all('*', (req, res) => {
-//   res.send("<h1>404 Page not found</h1>") } )
+
 // Register route
 app.use(cors());
 app.use(function (req, res, next) {
