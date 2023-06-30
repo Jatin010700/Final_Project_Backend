@@ -10,10 +10,10 @@ const port = 5000
 const db = knex({
   client: 'pg',
   connection: {
-    host: 'localhost',
-    user: 'postgres',
-    password: '07012000',
-    database: 'LOGIN/REGISTER'
+    host: process.env.db_host,
+    user: process.env.db_user,
+    password: process.env.db_password,
+    database: process.env.db_DB,
   }
 });
 
