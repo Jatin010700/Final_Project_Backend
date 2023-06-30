@@ -17,6 +17,7 @@ const db = knex({
     password: process.env.db_password,
     database: process.env.db_DB,
   }
+
 });
 
 // Middleware to parse JSON body
