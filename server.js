@@ -25,7 +25,7 @@ app.use(express.json());
 // Register route
 app.post('/register', async (req, res) => {
   const { firstName, lastName, email, username, password } = req.body;
-
+console.log(firstName)
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
 
