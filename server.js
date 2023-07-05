@@ -117,7 +117,7 @@ app.post("/confirmLink", async (req, res) => {
       from: "CarRental@gmail.com",
       to: email,
       subject: "Confirmation Link",
-      html: "Click the following link to reset Password: http://localhost:3000/forgotPass",
+      html: "Click the following link to reset Password: https://car-rental-back.onrender.com/forgotPass",
     };
 
     transporter.sendMail(mailOptions, (error, info) => {
