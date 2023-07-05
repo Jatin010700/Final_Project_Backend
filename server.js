@@ -4,6 +4,8 @@ const knex = require('knex');
 const bcrypt = require('bcrypt');
 const cors = require('cors')
 const nodemailer = require('nodemailer')
+const dotenv = require("dotenv")
+dotenv.config();
 
 const port = 5000
 const app = express();
@@ -108,13 +110,13 @@ app.post("/confirmLink", async (req, res) => {
     const transporter = nodemailer.createTransport({
       service: "Gmail",
       auth: {
-        user: "cynthianyahoda19@gmail.com", // Valid Email needed
-        pass: "kxlimfnzdyizvkqu", // Valid password needed
+        user: process.env.EMAIL, // Valid Email needed
+        pass: process.env.PASS, // Valid password needed
       },
     });
 
     const mailOptions = {
-      from: "CarRental@gmail.com",
+      from: process.env.EMAIL,
       to: email,
       subject: "Confirmation Link",
       html: "Click the following link to reset Password: https://car-rental-front.onrender.com/forgotPass",
