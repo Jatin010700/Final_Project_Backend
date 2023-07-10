@@ -106,6 +106,8 @@ app.post("/confirmLink", async (req, res) => {
   // console.log(req.body)
   const { email } = req.body;
   // console.log(email)
+  const expiryTime = Date.now() + 60 * 1000; // Expiry time set to 24 hours from now
+console.log(expiryTime)
   try {
     const transporter = nodemailer.createTransport({
       service: "Gmail",
@@ -119,7 +121,8 @@ app.post("/confirmLink", async (req, res) => {
       from: process.env.EMAIL,
       to: email,
       subject: "Confirmation Link",
-      html: "Click the following link to reset Password: https://car-rental-front.onrender.com/forgotPass",
+      html: `Click the following link to reset Password: 
+      <a href="https://car-rental-front.onrender.com/forgotPass?expiry=${expiryTime}">Reset Password</a>`,
     };
 
     transporter.sendMail(mailOptions, (error, info) => {
@@ -130,7 +133,7 @@ app.post("/confirmLink", async (req, res) => {
         console.log(`Email sent: ${info.response}`);
         res
           .status(200)
-          .json({ message: "Confirmation email sent successfully" });
+          .json({ message: "Confirmation email sent" });
         res.status(201).json({ status: 201, info });
       }
     });
@@ -167,3 +170,23 @@ app.post('/reset-password', async (req, res) => {
     res.status(500).json({ error: 'An error occurred during password reset.' });
   }
 });
+
+//Search-User Route
+// app.get("/search-username/:username", async (req, res) => {
+//   const { username } = req.params;
+
+//   try {
+//     const user = await db("register").where({ username }).first();
+
+//     if (!user) {
+//       res.status(404).json({ error: "Username not found" });
+//     } else {
+//       res.json({ message: "Username found" });
+//     }
+//   } catch (error) {
+//     console.error(error);
+//     res
+//       .status(500)
+//       .json({ error: "An error occurred during username search." });
+//   }
+// });
