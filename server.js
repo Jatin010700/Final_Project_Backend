@@ -207,7 +207,7 @@ app.get('/api/images/:id', async (req, res) => {
     }
 
     res.setHeader('Content-Type', 'image/jpeg');
-    res.send(imageData.Img_Data);
+    res.send(imageData.img_data);
   } catch (err) {
     console.error('Error occurred fetching image:', err);
     res.status(500).json({ error: 'Error occurred fetching image' });
