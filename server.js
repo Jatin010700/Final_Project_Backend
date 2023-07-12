@@ -171,6 +171,28 @@ app.post('/reset-password', async (req, res) => {
   }
 });
 
+// Get image from database
+app.get('/api/images/:img_name', async (req, res) => {
+  try {
+    const { img_name } = req.params;
+
+    const imageData = await db.select('*')
+      .from('images')
+      .where('img_name', img_name)
+      .first();
+
+    if (!imageData) {
+      return res.status(404).json({ error: 'Image not found' });
+    }
+
+    res.setHeader('Content-Type', 'image/jpeg');
+    res.send(imageData.img_data);
+  } catch (err) {
+    console.error('Error occurred fetching image:', err);
+    res.status(500).json({ error: 'Error occurred fetching image' });
+  }
+});
+
 //Search-User Route
 // app.get("/search-username/:username", async (req, res) => {
 //   const { username } = req.params;
