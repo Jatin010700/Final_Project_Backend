@@ -172,16 +172,34 @@ app.post('/reset-password', async (req, res) => {
   }
 });
 
-
-
 // Get image from database
-app.get('/api/images/:img_name', async (req, res) => {
+// app.get('/api/images/:img_name', async (req, res) => {
+//   try {
+//     const { img_name } = req.params;
+
+//     const imageData = await db.select('*')
+//       .from('images')
+//       .where('img_name', img_name)
+//       .first();
+
+//     if (!imageData) {
+//       return res.status(404).json({ error: 'Image not found' });
+//     }
+
+//     res.setHeader('Content-Type', 'image/jpeg');
+//     res.send(imageData.img_data);
+//   } catch (err) {
+//     console.error('Error occurred fetching image:', err);
+//     res.status(500).json({ error: 'Error occurred fetching image' });
+//   }
+// });
+app.get('/api/images/:id', async (req, res) => {
   try {
-    const { img_name } = req.params;
+    const { id } = req.params;
 
     const imageData = await db.select('*')
       .from('images')
-      .where('img_name', img_name)
+      .where('id', id)
       .first();
 
     if (!imageData) {
@@ -189,12 +207,14 @@ app.get('/api/images/:img_name', async (req, res) => {
     }
 
     res.setHeader('Content-Type', 'image/jpeg');
-    res.send(imageData.img_data);
+    res.send(imageData.Img_Data);
   } catch (err) {
     console.error('Error occurred fetching image:', err);
     res.status(500).json({ error: 'Error occurred fetching image' });
   }
 });
+
+
 //---------------------ADMIN---------------------//
 //upload image to database
 app.post("/upload", upload.single("image"), async (req, res) => {
