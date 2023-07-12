@@ -4,6 +4,7 @@ const knex = require('knex');
 const bcrypt = require('bcrypt');
 const cors = require('cors')
 const nodemailer = require('nodemailer')
+const multer = require("multer");
 const dotenv = require("dotenv")
 dotenv.config();
 
@@ -28,7 +29,7 @@ const db = knex({
 
 // Middleware to parse JSON body
 app.use(express.json());
-
+const upload = multer();
 // Register route
 app.use(cors());
 app.use(function (req, res, next) {
@@ -171,6 +172,8 @@ app.post('/reset-password', async (req, res) => {
   }
 });
 
+
+
 // Get image from database
 app.get('/api/images/:img_name', async (req, res) => {
   try {
@@ -190,6 +193,27 @@ app.get('/api/images/:img_name', async (req, res) => {
   } catch (err) {
     console.error('Error occurred fetching image:', err);
     res.status(500).json({ error: 'Error occurred fetching image' });
+  }
+});
+//---------------------ADMIN---------------------//
+//upload image to database
+app.post("/upload", upload.single("image"), async (req, res) => {
+  try {
+    const imageBuffer = req.file.buffer;
+    const imgName = req.file.originalname; // Example: using original file name as img_name
+
+    const insertImg = await DB.raw(
+      "INSERT INTO images (img_name, img_data) VALUES (?, ?)",
+      [imgName, imageBuffer]
+    );
+
+    if (!insertImg) {
+      return res.status(404).json({ error: "Image not uploaded" });
+    }
+    res.json({ message: "Image uploaded successfully!" });
+  } catch (err) {
+    console.error("Error occurred inserting image:", err);
+    res.status(500).json({ error: "Error occurred inserting image" });
   }
 });
 
