@@ -202,7 +202,7 @@ app.post("/upload", upload.single("image"), async (req, res) => {
     const imageBuffer = req.file.buffer;
     const imgName = req.file.originalname; // Example: using original file name as img_name
 
-    const insertImg = await DB.raw(
+    const insertImg = await db.raw(
       "INSERT INTO images (img_name, img_data) VALUES (?, ?)",
       [imgName, imageBuffer]
     );
