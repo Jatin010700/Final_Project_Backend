@@ -172,27 +172,7 @@ app.post('/reset-password', async (req, res) => {
   }
 });
 
-// Get image from database
-// app.get('/api/images/:img_name', async (req, res) => {
-//   try {
-//     const { img_name } = req.params;
-
-//     const imageData = await db.select('*')
-//       .from('images')
-//       .where('img_name', img_name)
-//       .first();
-
-//     if (!imageData) {
-//       return res.status(404).json({ error: 'Image not found' });
-//     }
-
-//     res.setHeader('Content-Type', 'image/jpeg');
-//     res.send(imageData.img_data);
-//   } catch (err) {
-//     console.error('Error occurred fetching image:', err);
-//     res.status(500).json({ error: 'Error occurred fetching image' });
-//   }
-// });
+//Find images by Id
 app.get('/api/images/:id', async (req, res) => {
   try {
     const { id } = req.params;
@@ -216,20 +196,29 @@ app.get('/api/images/:id', async (req, res) => {
 
 
 //---------------------ADMIN---------------------//
-//upload image to database
+// upload image to database
 app.post("/upload", upload.single("image"), async (req, res) => {
   try {
+    const id = req.body.id; // Retrieve the ID from the request body
     const imageBuffer = req.file.buffer;
-    const imgName = req.file.originalname; // Example: using original file name as img_name
+    const imgName = req.file.originalname;
 
-    const insertImg = await db.raw(
-      "INSERT INTO images (img_name, img_data) VALUES (?, ?)",
-      [imgName, imageBuffer]
-    );
+    // Check if the ID already exists in the database
+    const existingImage = await db('images').where('id', id).first();
+    if (existingImage) {
+      return res.status(400).json({ error: "ID already exists" });
+    }
+
+    const insertImg = await db('images').insert({
+      id: id,
+      img_name: imgName,
+      img_data: imageBuffer,
+    });
 
     if (!insertImg) {
       return res.status(404).json({ error: "Image not uploaded" });
     }
+
     res.json({ message: "Image uploaded successfully!" });
   } catch (err) {
     console.error("Error occurred inserting image:", err);
@@ -237,22 +226,43 @@ app.post("/upload", upload.single("image"), async (req, res) => {
   }
 });
 
-//Search-User Route
-// app.get("/search-username/:username", async (req, res) => {
-//   const { username } = req.params;
+// Update route
+app.post("/update/:id", upload.single("image"), async (req, res) => {
+  try {
+    const id = req.params.id;
+    const imageBuffer = req.file.buffer;
+    const imgName = req.file.originalname;
 
-//   try {
-//     const user = await db("register").where({ username }).first();
+    const updateImg = await db('images')
+      .where('id', id)
+      .update({ img_name: imgName, img_data: imageBuffer });
 
-//     if (!user) {
-//       res.status(404).json({ error: "Username not found" });
-//     } else {
-//       res.json({ message: "Username found" });
-//     }
-//   } catch (error) {
-//     console.error(error);
-//     res
-//       .status(500)
-//       .json({ error: "An error occurred during username search." });
-//   }
-// });
+    if (updateImg === 0) {
+      return res.status(404).json({ error: "Database not Updated" });
+    }
+    return res.status(200).json({ message: "Database updated successfully." });
+  } catch (error) {
+    console.error("Error executing database query:", error);
+    return res.status(500).json({ error: "Failed to update the database." });
+  }
+});
+
+//delete image from database
+app.post('/delete/:id', async (req, res) => {
+  try {
+    const id = req.params.id;
+
+    const deleteImg = await db('images')
+    .where('id', id)
+    .del();
+
+    if (deleteImg === 0) {
+      return res.status(404).json({ error: "Image not Deleted"})
+    }
+    return res.status(200).json({message: "Image Deleted"})
+  } catch (error) {
+    console.error("Server Error", error)
+    return res.status(500).json({ error: "Failed to delete image." });
+
+  }
+})
