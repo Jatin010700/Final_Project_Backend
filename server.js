@@ -218,10 +218,18 @@ app.post('/reset-password', async (req, res) => {
 
 //--------------OWNER_RENTING_THEIR_CAR---------------//
 app.post("/api/owner-data", upload.array('images', 5), async (req, res) => {
-  const { carName, price, rent, username } = req.body;
+  const { carName, price, rent,username } = req.body;
 
   try {  
     // const userID = req.userId;
+
+// Assuming you have a function to retrieve the user ID from the username
+const user = await db('register').where({ username }).first();
+console.log(user)
+if (!user) {
+  return res.status(404).json({ error: 'User not found.' });
+}
+
 
     const imageURLS = await Promise.all(
       req.files.map(async (file) => {
@@ -233,9 +241,9 @@ app.post("/api/owner-data", upload.array('images', 5), async (req, res) => {
     await db('car_listings').insert({
       car_name: carName,
       price: price,
-      rent: rent,
+      rent: rent, 
       image_url: imageURLS,
-      login_id: username
+      login_user_name: user.username,
     });
 
  
