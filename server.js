@@ -94,7 +94,7 @@ app.post("/register", async (req, res) => {
       username,
       password: hashedPassword,
       created_date: new Date().toISOString(),
-      last_login: null,
+      // last_login: null,
     });
 
     res.json({ message: "👍 REGISTRATION SUCCESSFUL" });
