@@ -1,44 +1,44 @@
 // server.js
-const express = require('express');
-const knex = require('knex');
-const bcrypt = require('bcrypt');
-const cors = require('cors')
-const nodemailer = require('nodemailer')
+const express = require("express");
+const knex = require("knex");
+const bcrypt = require("bcrypt");
+const cors = require("cors");
+const nodemailer = require("nodemailer");
 const multer = require("multer");
-const cloudinary = require('cloudinary').v2;
-const jwt = require('jsonwebtoken');
+const cloudinary = require("cloudinary").v2;
+const jwt = require("jsonwebtoken");
 
-const dotenv = require("dotenv")
+const dotenv = require("dotenv");
 dotenv.config();
 
-const port = 5000
+const port = 5000;
 const app = express();
 // Start the server
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
 });
-    
-cloudinary.config({ 
-  cloud_name: process.env.CLOUDINARY_NAME, 
-  api_key: process.env.CLOUDINARY_API_KEY, 
-  api_secret: process.env.CLOUDINARY_API_SECRET 
+
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
 // Initialize Knex with PostgreSQL database configuration
 const db = knex({
-  client: 'pg',
+  client: "pg",
   connection: {
     host: process.env.DB_LOCAL_HOST,
     user: process.env.DB_LOCAL_USER,
     password: process.env.DB_LOCAL_PASS,
     database: process.env.DB_LOCAL_DB,
-    port: process.env.DB_LOCAL_PORT
-  }
+    port: process.env.DB_LOCAL_PORT,
+  },
 });
 
 // Middleware to parse JSON body
 app.use(express.json());
-const upload = multer({ dest: 'uploads/' });
+const upload = multer({ dest: "uploads/" });
 
 //-----------------------------------------------------------------------------------------//
 
@@ -53,8 +53,8 @@ app.use(function (req, res, next) {
     "Access-Control-Allow-Headers",
     "Origin, X-Requested-With, Content-Type, Accept, Authorization"
   );
-  next()
-})
+  next();
+});
 
 // // Middleware to verify JWT
 // function verifyToken(req, res, next) {
@@ -80,69 +80,67 @@ app.use(function (req, res, next) {
 // });
 
 // Register route
-app.post('/register', async (req, res) => {
+app.post("/register", async (req, res) => {
   const { firstName, lastName, email, username, password } = req.body;
-console.log(firstName)
+  // console.log(firstName)
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    await db('register').insert({
+    await db("register").insert({
       first_name: firstName,
       last_name: lastName,
       email,
       username,
       password: hashedPassword,
       created_date: new Date().toISOString(),
-      last_login: null
+      last_login: null,
     });
 
-    res.json({ message: '👍 REGISTRATION SUCCESSFUL' });
+    res.json({ message: "👍 REGISTRATION SUCCESSFUL" });
   } catch (error) {
-    if (error.code === '23505') {
-      res.status(400).json({ error: '✖ EMAIL ALREADY EXISTS' });
+    if (error.code === "23505") {
+      res.status(400).json({ error: "✖ EMAIL ALREADY EXISTS" });
     } else {
       console.error(error);
-      res.status(500).json({ error: 'An error occurred during registration.' });
+      res.status(500).json({ error: "An error occurred during registration." });
     }
   }
 });
 
 // Login route
-app.post('/login', async (req, res) => {
+app.post("/login", async (req, res) => {
   const { username, password } = req.body;
 
   try {
-    const user = await db('register')
-    .where({ username })
-    .first();
+    const user = await db("register").where({ username }).first();
 
     if (!user) {
-      res.status(401).json({ error: '✖ USERNAME NOT FOUND' });
+      res.status(401).json({ error: "✖ USERNAME NOT FOUND" });
       return;
     }
 
     const passwordMatch = await bcrypt.compare(password, user.password);
 
     if (!passwordMatch) {
-      res.status(401).json({ error: '✖ INCORRECT PASSWORD' });
+      res.status(401).json({ error: "✖ INCORRECT PASSWORD" });
       return;
     }
 
-    await db('login').insert({
+    await db("login").insert({
       username,
-      password: user.password
+      password: user.password,
     });
 
     // // Create a JWT with the user's ID as the payload
-    // const token = jwt.sign({ userId: user.id }, 
+    // const token = jwt.sign({ userId: user.id },
     //   process.env.JWT_SECRET, {
     //   expiresIn: '30s', // Token expiration time
     // });
 
-    res.json({ message: '👍 LOGIN SUCCESSFUL' });
+    res.json({ message: "👍 LOGIN SUCCESSFUL" });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: 'An error occurred during login.' });
+    res.status(500).json({ error: "An error occurred during login." });
   }
 });
 
@@ -152,7 +150,7 @@ app.post("/confirmLink", async (req, res) => {
   const { email } = req.body;
   // console.log(email)
   const expiryTime = Date.now() + 60 * 1000; // Expiry time set to 24 hours from now
-console.log(expiryTime)
+  console.log(expiryTime);
   try {
     const transporter = nodemailer.createTransport({
       service: "Gmail",
@@ -176,9 +174,7 @@ console.log(expiryTime)
         console.log(`Error:${error}`);
       } else {
         console.log(`Email sent: ${info.response}`);
-        res
-          .status(200)
-          .json({ message: "Confirmation email sent" });
+        res.status(200).json({ message: "Confirmation email sent" });
         res.status(201).json({ status: 201, info });
       }
     });
@@ -189,68 +185,83 @@ console.log(expiryTime)
 });
 
 // Endpoint to handle password reset request
-app.post('/reset-password', async (req, res) => {
+app.post("/reset-password", async (req, res) => {
   const { username, newPassword } = req.body;
 
   try {
     // Find the user by username in the database
-    const user = await db('register').where({ username }).first();
+    const user = await db("register").where({ username }).first();
 
     if (!user) {
-      return res.status(404).json({ error: 'User not found.' });
+      return res.status(404).json({ error: "User not found." });
     }
 
     // Generate a hash for the new password
     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
     // Update the password in the database
-    await db('register')
+    await db("register")
       .where({ username })
       .update({ password: hashedPassword });
 
     // Send a success response
-    res.json({ message: 'Password reset successful.' });
+    res.json({ message: "Password reset successful." });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: 'An error occurred during password reset.' });
+    res.status(500).json({ error: "An error occurred during password reset." });
   }
 });
 
 //--------------OWNER_RENTING_THEIR_CAR---------------//
-app.post("/api/owner-data", upload.array('images', 5), async (req, res) => {
-  const { carName, price, rent,username } = req.body;
+app.post("/api/owner-data", upload.array("images", 5), async (req, res) => {
+  const { carName, price, rent, username } = req.body;
 
-  try {  
+  try {
     // const userID = req.userId;
 
-// Assuming you have a function to retrieve the user ID from the username
-const user = await db('register').where({ username }).first();
-console.log(user)
-if (!user) {
-  return res.status(404).json({ error: 'User not found.' });
-}
-
+    // Assuming you have a function to retrieve the user ID from the username
+    const user = await db("register").where({ username }).first();
+    // console.log(user)
+    if (!user) {
+      return res.status(404).json({ error: "User not found." });
+    }
 
     const imageURLS = await Promise.all(
       req.files.map(async (file) => {
         const result = await cloudinary.uploader.upload(file.path);
-        return result.secure_url; 
+        return result.secure_url;
       })
     );
- 
-    await db('car_listings').insert({
+
+    // Convert the array of image URLs to a JSON string
+    const imageUrlsJson = JSON.stringify(imageURLS);
+
+
+    await db("car_listings").insert({
       car_name: carName,
       price: price,
-      rent: rent, 
-      image_url: imageURLS,
+      rent: rent,
+      image_url: imageUrlsJson,
       login_user_name: user.username,
     });
 
- 
     res.status(200).json({ message: "Data saved!" });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: 'An error occurred saving data' });
+    res.status(500).json({ error: "An error occurred saving data" });
+  }
+});
+
+app.get("/api/car-data", async (req, res) => {
+  try {
+    // Fetch all records from the car_listings table
+    const carListings = await db('car_listings').select('*');
+    // console.log('Fetched car listings:', carListings);
+
+    res.json(carListings);
+  } catch (err) {
+    console.error('Error occurred fetching data:', err);
+    res.status(500).json({ error: 'Error occurred fetching data' });
   }
 });
 
@@ -278,7 +289,6 @@ if (!user) {
 //     res.status(500).json({ error: 'Error occurred fetching image' });
 //   }
 // });
-
 
 // //---------------------ADMIN---------------------//
 // // upload image to database
