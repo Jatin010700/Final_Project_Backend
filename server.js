@@ -19,9 +19,9 @@ app.listen(port, () => {
 });
 
 cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
+  cloud_name: process.env.RENDER_CLOUDINARY_NAME,
+  api_key: process.env.RENDER_CLOUDINARY_API_KEY,
+  api_secret: process.env.RENDER_CLOUDINARY_API_SECRET,
 });
 
 // Initialize Knex with PostgreSQL database configuration
