@@ -214,7 +214,7 @@ app.post("/reset-password", async (req, res) => {
 });
 
 //--------------OWNER_RENTING_THEIR_CAR---------------//
-app.post("/api/owner-data", upload.array("images", 5), async (req, res) => {
+app.post("/owner-data", upload.array("images", 5), async (req, res) => {
   const { carName, price, rent, username } = req.body;
 
   try {
