@@ -32,10 +32,11 @@ const db = knex({
     user: process.env.RENDER_USER,
     password: process.env.RENDER_PASS,
     database: process.env.RENDER_DB,
+    ssl: true, 
     // port: process.env.DB_LOCAL_PORT,
   },
 });
-
+console.log(process.env.RENDER_HOST)
 // Middleware to parse JSON body
 app.use(express.json());
 const upload = multer({ dest: "uploads/" });
