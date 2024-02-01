@@ -35,11 +35,11 @@ cloudinary.config({
 const db = knex({
   client: "pg",
   connection: {
-    host: process.env.DB_LOCAL_HOST,
-    user: process.env.DB_LOCAL_USER,
-    password: process.env.DB_LOCAL_PASS,
-    database: process.env.DB_LOCAL_DB,
-    // ssl: true, 
+    host: process.env.RENDER_HOST,
+    user: process.env.RENDER_USER,
+    password: process.env.RENDER_PASS,
+    database: process.env.RENDER_DB,
+    ssl: true, 
     // port: process.env.DB_LOCAL_PORT,
   },
 });
