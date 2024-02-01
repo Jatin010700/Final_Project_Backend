@@ -7,6 +7,9 @@ const nodemailer = require("nodemailer");
 const multer = require("multer");
 const cloudinary = require("cloudinary").v2;
 const jwt = require("jsonwebtoken");
+const cookieParser = require("cookie-parser");
+const { auth, requiresAuth } = require("express-openid-connect");
+
 
 const dotenv = require("dotenv");
 dotenv.config();
@@ -18,6 +21,10 @@ app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
 });
 
+const JWTSecretKey = process.env.AUTH0_SECRET_KEY
+const users = [];
+
+//cloudinary setup
 cloudinary.config({
   cloud_name: process.env.RENDER_CLOUDINARY_NAME,
   api_key: process.env.RENDER_CLOUDINARY_API_KEY,
@@ -28,64 +35,87 @@ cloudinary.config({
 const db = knex({
   client: "pg",
   connection: {
-    host: process.env.RENDER_HOST,
-    user: process.env.RENDER_USER,
-    password: process.env.RENDER_PASS,
-    database: process.env.RENDER_DB,
-    ssl: true, 
+    host: process.env.DB_LOCAL_HOST,
+    user: process.env.DB_LOCAL_USER,
+    password: process.env.DB_LOCAL_PASS,
+    database: process.env.DB_LOCAL_DB,
+    // ssl: true, 
     // port: process.env.DB_LOCAL_PORT,
   },
 });
-console.log(process.env.RENDER_HOST)
+
+//Auth0 setup
+const config = {
+  authRequired: false,
+  auth0Logout: true,
+  baseURL: 'http://localhost:3000',
+  clientID: process.env.AUTH0_CLIENT_ID,
+  issuerBaseURL: 'https://dev-tii6oqkuei5k4hbn.us.auth0.com',
+  secret: process.env.AUTH0_SECRET_KEY
+};
+
+//CORS
+app.use(cors({ 
+  origin: "http://localhost:3000",  
+  credentials: true,
+}));
+
 // Middleware to parse JSON body
 app.use(express.json());
+app.use(cookieParser())
+app.use(auth(config))
 const upload = multer({ dest: "uploads/" });
+const authMiddleware = require("./authMiddleware");
 
 //-----------------------------------------------------------------------------------------//
 
-app.use(cors());
-app.use(function (req, res, next) {
-  res.header("Access-Control-Allow-Origin", "*");
-  res.header(
-    "Access-Control-Allow-Methods",
-    "GET, HEAD, OPTIONS, POST,PUT, DELETE"
-  );
-  res.header(
-    "Access-Control-Allow-Headers",
-    "Origin, X-Requested-With, Content-Type, Accept, Authorization"
-  );
-  next();
+//Manual cors
+// app.use(function (req, res, next) {
+//   res.header("Access-Control-Allow-Origin", "*");
+//   res.header(
+//     "Access-Control-Allow-Methods",
+//     "GET, HEAD, OPTIONS, POST,PUT, DELETE"
+//   );
+//   res.header(
+//     "Access-Control-Allow-Headers",
+//     "Origin, X-Requested-With, Content-Type, Accept, Authorization"
+//   );
+//   res.header('Access-Control-Allow-Credentials', 'true');
+//   next();
+// });
+
+//-------------------------------------------------------------------------------------------//
+
+//Protect_Routes
+app.get("/", (req, res) => {
+  res.send(
+    req.oidc.isAuthenticated() ? "Logged in" : "Logged out"
+  )
+})
+
+// Protected route that requires authentication
+app.get('/profile', authMiddleware, (req, res) => {
+  // Access the authenticated user's information via req.user
+  res.json({ message: `Welcome, ${req.user.username}!` });
 });
 
-// // Middleware to verify JWT
-// function verifyToken(req, res, next) {
-//   const token = req.headers.authorization;
-
-//   if (!token) {
-//     return res.status(401).json({ error: 'Token not provided' });
-//   }
-
-//   jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
-//     if (err) {
-//       return res.status(403).json({ error: 'Failed to authenticate token' });
-//     }
-
-//     // Store the user ID in the request for further processing
-//     req.userId = decoded.userId;
-//     next();
-//   });
-// }
-// // Example protected route
-// app.get('/secure-route', verifyToken, (req, res) => {
-//   res.json({ message: '👍 You have access to this protected route!' });
-// });
+//--------------------------------------------------------------------------------------------//
 
 // Register route
 app.post("/register", async (req, res) => {
   const { firstName, lastName, email, username, password } = req.body;
   // console.log(firstName)
   try {
+
     const hashedPassword = await bcrypt.hash(password, 10);
+    // Create a new user
+    const newUser = { id: users.length + 1, username, password: hashedPassword }
+    users.push(newUser)
+
+    // Generate a JWT for the new user
+    const token = jwt.sign({ id: newUser.id, username: newUser.username }, JWTSecretKey, {
+    expiresIn: '1h', // Token expires in 1 hour
+    });
 
     await db("register").insert({
       first_name: firstName,
@@ -97,7 +127,8 @@ app.post("/register", async (req, res) => {
       // last_login: null,
     });
 
-    res.json({ message: "👍 REGISTRATION SUCCESSFUL" });
+    res.cookie("token", token, { httpOnly: true})
+    res.status(200).json({ message: "REGISTRATION SUCCESSFUL", token });
   } catch (error) {
     if (error.code === "23505") {
       res.status(400).json({ error: "✖ EMAIL ALREADY EXISTS" });
@@ -132,18 +163,25 @@ app.post("/login", async (req, res) => {
       password: user.password,
     });
 
-    // // Create a JWT with the user's ID as the payload
-    // const token = jwt.sign({ userId: user.id },
-    //   process.env.JWT_SECRET, {
-    //   expiresIn: '30s', // Token expiration time
-    // });
-
-    res.json({ message: "👍 LOGIN SUCCESSFUL" });
+    // Generate a JWT for the authenticated user
+    const token = jwt.sign({ id: user.id, username: user.username }, JWTSecretKey, {
+      expiresIn: '1h', // Token expires in 1 hour
+    });
+    // console.log(jwt.decode(token));
+    // Set the JWT as an HTTP cookie
+    res.cookie('token', token, { httpOnly: true });
+    res.status(200).json({ message: "LOGIN SUCCESSFUL", token });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "An error occurred during login." });
   }
 });
+
+// logout route
+app.post("/logout", (req, res) => {
+  res.clearCookie("token");
+  res.status(200).json({ message: "Logout Successful"})
+})
 
 // Route for sending the confirmation email
 app.post("/confirmLink", async (req, res) => {
@@ -213,7 +251,7 @@ app.post("/reset-password", async (req, res) => {
   }
 });
 
-//--------------OWNER_RENTING_THEIR_CAR---------------//
+//--------------OWNER_RENTING_THEIR_CAR_ROUTE---------------//
 app.post("/owner-data", upload.array("images", 5), async (req, res) => {
   const { carName, price, rent, username } = req.body;
 
@@ -236,7 +274,6 @@ app.post("/owner-data", upload.array("images", 5), async (req, res) => {
 
     // Convert the array of image URLs to a JSON string
     const imageUrlsJson = JSON.stringify(imageURLS);
-
 
     await db("car_listings").insert({
       car_name: carName,
@@ -265,100 +302,3 @@ app.get("/api/car-data", async (req, res) => {
     res.status(500).json({ error: 'Error occurred fetching data' });
   }
 });
-
-
-//------------------------------------------------------------------------------------------------//
-
-// //Find images by Id
-// app.get('/api/images/:id', async (req, res) => {
-//   try {
-//     const { id } = req.params;
-
-//     const imageData = await db.select('*')
-//       .from('images')
-//       .where('id', id)
-//       .first();
-
-//     if (!imageData) {
-//       return res.status(404).json({ error: 'Image not found' });
-//     }
-
-//     res.setHeader('Content-Type', 'image/jpeg');
-//     res.send(imageData.img_data);
-//   } catch (err) {
-//     console.error('Error occurred fetching image:', err);
-//     res.status(500).json({ error: 'Error occurred fetching image' });
-//   }
-// });
-
-// //---------------------ADMIN---------------------//
-// // upload image to database
-// app.post("/upload", upload.single("image"), async (req, res) => {
-//   try {
-//     const id = req.body.id; // Retrieve the ID from the request body
-//     const imageBuffer = req.file.buffer;
-//     const imgName = req.file.originalname;
-
-//     // Check if the ID already exists in the database
-//     const existingImage = await db('images').where('id', id).first();
-//     if (existingImage) {
-//       return res.status(400).json({ error: "ID already exists" });
-//     }
-
-//     const insertImg = await db('images').insert({
-//       id: id,
-//       img_name: imgName,
-//       img_data: imageBuffer,
-//     });
-
-//     if (!insertImg) {
-//       return res.status(404).json({ error: "Image not uploaded" });
-//     }
-
-//     res.json({ message: "Image uploaded successfully!" });
-//   } catch (err) {
-//     console.error("Error occurred inserting image:", err);
-//     res.status(500).json({ error: "Error occurred inserting image" });
-//   }
-// });
-
-// // Update route
-// app.post("/update/:id", upload.single("image"), async (req, res) => {
-//   try {
-//     const id = req.params.id;
-//     const imageBuffer = req.file.buffer;
-//     const imgName = req.file.originalname;
-
-//     const updateImg = await db('images')
-//       .where('id', id)
-//       .update({ img_name: imgName, img_data: imageBuffer });
-
-//     if (updateImg === 0) {
-//       return res.status(404).json({ error: "Database not Updated" });
-//     }
-//     return res.status(200).json({ message: "Database updated successfully." });
-//   } catch (error) {
-//     console.error("Error executing database query:", error);
-//     return res.status(500).json({ error: "Failed to update the database." });
-//   }
-// });
-
-// //delete image from database
-// app.post('/delete/:id', async (req, res) => {
-//   try {
-//     const id = req.params.id;
-
-//     const deleteImg = await db('images')
-//     .where('id', id)
-//     .del();
-
-//     if (deleteImg === 0) {
-//       return res.status(404).json({ error: "Image not Deleted"})
-//     }
-//     return res.status(200).json({message: "Image Deleted"})
-//   } catch (error) {
-//     console.error("Server Error", error)
-//     return res.status(500).json({ error: "Failed to delete image." });
-
-//   }
-// })
