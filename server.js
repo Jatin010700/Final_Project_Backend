@@ -21,7 +21,7 @@ app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
 });
 
-const JWTSecretKey = process.env.AUTH0_SECRET_KEY
+const JWTSecretKey = process.env.RENDER_AUTH0_SECRET_KEY
 const users = [];
 
 //cloudinary setup
