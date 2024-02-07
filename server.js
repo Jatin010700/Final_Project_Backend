@@ -8,7 +8,7 @@ const multer = require("multer");
 const cloudinary = require("cloudinary").v2;
 const jwt = require("jsonwebtoken");
 const cookieParser = require("cookie-parser");
-const { auth, requiresAuth } = require("express-openid-connect");
+const { auth } = require("express-openid-connect");
 
 
 const dotenv = require("dotenv");
@@ -48,15 +48,17 @@ const db = knex({
 const config = {
   authRequired: false,
   auth0Logout: true,
-  baseURL: 'http://localhost:3000',
-  clientID: process.env.AUTH0_CLIENT_ID,
+  // baseURL: 'http://localhost:3000',
+  baseURL: "https://car-rental-front.onrender.com",
+  clientID: process.env.RENDER_AUTH0_CLIENT_ID,
   issuerBaseURL: 'https://dev-tii6oqkuei5k4hbn.us.auth0.com',
-  secret: process.env.AUTH0_SECRET_KEY
+  secret: process.env.RENDER_AUTH0_SECRET_KEY
 };
 
 //CORS
 app.use(cors({ 
-  origin: "http://localhost:3000",  
+  origin: "https://car-rental-front.onrender.com",
+  // origin: "http://localhost:3000",  
   credentials: true,
 }));
 
