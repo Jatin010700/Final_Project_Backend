@@ -71,7 +71,7 @@ const config = {
   authRequired: false,
   auth0Logout: true,
   // baseURL: 'http://localhost:3000',
-  baseURL: "https://car-rental-front.onrender.com",
+  baseURL: "https://car-rental-20.vercel.app",
   clientID: process.env.RENDER_AUTH0_CLIENT_ID,
   issuerBaseURL: process.env.RENDER_AUTH0_ISSUE_BASE_URL,
   secret: process.env.RENDER_AUTH0_SECRET_KEY
@@ -79,7 +79,7 @@ const config = {
 
 // CORS
 app.use(cors({ 
-  origin: "https://car-rental-front.onrender.com",
+  origin: "https://car-rental-20.vercel.app",
   // origin: "http://localhost:3000",  
   credentials: true,
 }));
