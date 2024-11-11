@@ -1,17 +1,18 @@
-// server.js
-const express = require("express");
-const knex = require("knex");
-const bcrypt = require("bcrypt");
-const cors = require("cors");
-const nodemailer = require("nodemailer");
-const multer = require("multer");
-const cloudinary = require("cloudinary").v2;
-const jwt = require("jsonwebtoken");
-const cookieParser = require("cookie-parser");
-const { auth } = require("express-openid-connect");
+import express from 'express';
+// import knex from 'knex';
+import bcrypt from 'bcrypt';
+import cors from 'cors';
+import nodemailer from 'nodemailer';
+import multer from 'multer';
+import cloudinary from 'cloudinary';
+import jwt from 'jsonwebtoken';
+import cookieParser from 'cookie-parser';
+import { auth } from 'express-openid-connect';
+import dotenv from 'dotenv';
+import authMiddleware from "./authMiddleware.js"
+import { initializeApp } from "firebase/app";
+import { getDocs, getFirestore, collection, addDoc } from 'firebase/firestore';
 
-
-const dotenv = require("dotenv");
 dotenv.config();
 
 const port = 5000;
@@ -24,54 +25,72 @@ app.listen(port, () => {
 const JWTSecretKey = process.env.RENDER_AUTH0_SECRET_KEY
 const users = [];
 
-//cloudinary setup
+//CLOUDINARY CONFIG
 cloudinary.config({
   cloud_name: process.env.RENDER_CLOUDINARY_NAME,
   api_key: process.env.RENDER_CLOUDINARY_API_KEY,
   api_secret: process.env.RENDER_CLOUDINARY_API_SECRET,
 });
 
-// Initialize Knex with PostgreSQL database configuration
-const db = knex({
-  client: "pg",
-  connection: {
-    host: process.env.RENDER_HOST,
-    user: process.env.RENDER_USER,
-    password: process.env.RENDER_PASS,
-    database: process.env.RENDER_DB,
-    ssl: true, 
-    // port: process.env.DB_LOCAL_PORT,
-  },
-});
+//FIREBASE DATABASE CONFIG
+const firebaseConfig = {
+  apiKey: process.env.RENDER_FIREBASE_APIKEY,
+  authDomain: process.env.RENDER_FIREBASE_AUTHDOMAIN,
+  projectId: process.env.RENDER_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.RENDER_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.RENDER_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.RENDER_FIREBASE_APP_ID,
+  measurementId: process.env.RENDER_FIREBASE_MEASUREMENT_ID
+};
 
-//Auth0 setup
+initializeApp(firebaseConfig)
+const firebaseDB = getFirestore();
+//FIREBASE "register_user" COLLECTION
+const registerRef = collection(firebaseDB, 'register_user');
+//FIREBASE "login_account" COLLECTION
+const loginRef = collection(firebaseDB, 'login_account');
+//FIREBASE "owners_car_data" COLLECTION
+const ownerDataRef = collection(firebaseDB, 'owners_car_data');
+
+//------------POSTGRESQL DATABASE CONNECTION------------//
+// const db = knex({
+//   client: "pg",
+//   connection: {
+//     host: process.env.DB_LOCAL_HOST,
+//     user: process.env.DB_LOCAL_USER,
+//     password: process.env.DB_LOCAL_PASS,
+//     database: process.env.DB_LOCAL_DB,
+//     // ssl: true, 
+//     port: process.env.DB_LOCAL_PORT,
+//   },
+// });
+//------------POSTGRESQL DATABASE CONNECTION------------//
+
+// AUTH0 SETUP
 const config = {
   authRequired: false,
   auth0Logout: true,
   // baseURL: 'http://localhost:3000',
   baseURL: "https://car-rental-front.onrender.com",
   clientID: process.env.RENDER_AUTH0_CLIENT_ID,
-  issuerBaseURL: 'https://dev-tii6oqkuei5k4hbn.us.auth0.com',
+  issuerBaseURL: process.env.RENDER_AUTH0_ISSUE_BASE_URL,
   secret: process.env.RENDER_AUTH0_SECRET_KEY
 };
 
-//CORS
+// CORS
 app.use(cors({ 
   origin: "https://car-rental-front.onrender.com",
   // origin: "http://localhost:3000",  
   credentials: true,
 }));
 
-// Middleware to parse JSON body
 app.use(express.json());
+// MIDDLEWARE TO PARSE JSON BODY
 app.use(cookieParser())
 app.use(auth(config))
 const upload = multer({ dest: "uploads/" });
-const authMiddleware = require("./authMiddleware");
 
-//-----------------------------------------------------------------------------------------//
-
-//Manual cors
+//-------------------------------MANUAL CORS-------------------------------//
 // app.use(function (req, res, next) {
 //   res.header("Access-Control-Allow-Origin", "*");
 //   res.header(
@@ -85,113 +104,165 @@ const authMiddleware = require("./authMiddleware");
 //   res.header('Access-Control-Allow-Credentials', 'true');
 //   next();
 // });
+//-------------------------------MANUAL CORS-------------------------------//
 
-//-------------------------------------------------------------------------------------------//
+//--------------PROTECT ROUTE IF LOGIN OR NOT--------------//
 
-//Protect_Routes
+// PROTECT ROUTES
 app.get("/", (req, res) => {
   res.send(
     req.oidc.isAuthenticated() ? "Logged in" : "Logged out"
   )
 })
 
-// Protected route that requires authentication
+// PROTECTED ROUTE THAT REQUIRES AUTHENTICATION
 app.get('/profile', authMiddleware, (req, res) => {
   // Access the authenticated user's information via req.user
   res.json({ message: `Welcome, ${req.user.username}!` });
 });
+//--------------PROTECT ROUTE IF LOGIN OR NOT--------------//
 
-//--------------------------------------------------------------------------------------------//
+// REGISTER ROUTE
+app.post("/api/register", async (req, res) => {
+  const { fullName, email, username, password } = req.body;
 
-// Register route
-app.post("/register", async (req, res) => {
-  const { firstName, lastName, email, username, password } = req.body;
-  // console.log(firstName)
   try {
-
     const hashedPassword = await bcrypt.hash(password, 10);
-    // Create a new user
+
     const newUser = { id: users.length + 1, username, password: hashedPassword }
     users.push(newUser)
 
-    // Generate a JWT for the new user
+    const registerDB = await getDocs(registerRef);
+    const checkData = registerDB.docs.map(doc => ({ ...doc.data(), 
+        user_name: doc.data().user_name, 
+        email_address: doc.data().email_address 
+      })
+    );
+
+    // CHECK IF EMAIL ALREADY EXISTS IN "register_user" COLLECTION
+    const checkEmail = checkData.find(user => user.email_address === email);
+    const checkUser = checkData.find(user => user.user_name === username);
+
+    if (checkUser) {
+      return res.status(400).json({ error: "USERNAME ALREADY EXISTS" });
+    } else if (checkEmail) {
+      return res.status(400).json({ error: "EMAIL ALREADY EXISTS" });
+    }
+
+    // ADD NEW USER TO "register_user" COLLECTION
+    await addDoc(registerRef, {
+      full_name: fullName,
+      user_name: username,
+      email_address: email,
+      user_password: hashedPassword,
+      created_date: new Date().toISOString(),
+    })
+
+    // GENERATE A "JWT TOKEN" FOR THE USER
     const token = jwt.sign({ id: newUser.id, username: newUser.username }, JWTSecretKey, {
     expiresIn: '1h', // Token expires in 1 hour
     });
-
-    await db("register").insert({
-      first_name: firstName,
-      last_name: lastName,
-      email,
-      username,
-      password: hashedPassword,
-      created_date: new Date().toISOString(),
-      // last_login: null,
-    });
+    
+//-------------POSTGRES SQL CODE----------//
+    // await db("register").insert({
+    //   first_name: firstName,
+    //   last_name: lastName,
+    //   email,
+    //   username,
+    //   password: hashedPassword,
+    //   created_date: new Date().toISOString(),
+    //   // last_login: null,
+    // });
+//-------------POSTGRES SQL CODE----------//
 
     res.cookie("token", token, { httpOnly: true})
-    res.status(200).json({ message: "REGISTRATION SUCCESSFUL", token });
+    res.status(200).json({ message: "REGISTRATION SUCCESSFULL", token });
   } catch (error) {
-    if (error.code === "23505") {
-      res.status(400).json({ error: "✖ EMAIL ALREADY EXISTS" });
-    } else {
-      console.error(error);
-      res.status(500).json({ error: "An error occurred during registration." });
-    }
+    res.status(500).json({ error: "SERVER ERROR!!!" });
   }
 });
 
-// Login route
-app.post("/login", async (req, res) => {
-  const { username, password } = req.body;
+// LOGIN ROUTE
+app.post("/api/login", async (req, res) => {
+  const { username, email, password } = req.body;
 
   try {
-    const user = await db("register").where({ username }).first();
+    //GET "register_user" COLLECTION
+    const registerDB = await getDocs(registerRef);
+    const checkData = registerDB.docs.map(doc => ({ ...doc.data(), 
+        user_name: doc.data().user_name, 
+        email_address: doc.data().email_address, 
+        user_password: doc.data().user_password 
+      })
+    );
 
-    if (!user) {
-      res.status(401).json({ error: "✖ USERNAME NOT FOUND" });
-      return;
+    // CHECK IF USERNAME, EMAIL AND PASSWORD ARE THE SAME AS IN REGISTER COLLECTION
+    const checkUser = checkData.find(user => user.user_name === username);
+    const checkEmail = checkData.find(user => user.email_address === email);
+    const isPasswordValid = await bcrypt.compare(password, checkUser.user_password);
+
+    if (!checkUser) {
+      return res.status(400).json({ error: "INVALID USERNAME" });
+    } else if (!checkEmail) {
+      return res.status(400).json({ error: "INVALID EMAIL" });
+    } else if (!isPasswordValid) {
+      return res.status(400).json({ error: "INVALID PASSWORD" });
+    }
+    
+    for (const user of checkData) {
+      //ADD USER TO "login_account" COLLECTION
+        await addDoc(loginRef, {
+          login_user_name: user.user_name,
+          login_email_address: user.email_address,
+          login_password: user.user_password,
+          login_date: new Date().toISOString(),
+        });
+
+        if (checkUser && checkEmail && isPasswordValid) {
+          // GENERATE A "JWT TOKEN" FOR THE USER
+          const token = jwt.sign({ id: checkUser.id, username: checkUser.user_name }, JWTSecretKey, { expiresIn: '1h' });
+            return res.status(200).json({ message: "LOGIN SUCCESSFULL", token });
+        }
     }
 
-    const passwordMatch = await bcrypt.compare(password, user.password);
+    //-------------POSTGRES SQL CODE----------//
+    // const user = await db("register").where({ username }).first();
 
-    if (!passwordMatch) {
-      res.status(401).json({ error: "✖ INCORRECT PASSWORD" });
-      return;
-    }
+    // if (!user) {
+    //   res.status(401).json({ error: "✖ USERNAME NOT FOUND" });
+    //   return;
+    // }
 
-    await db("login").insert({
-      username,
-      password: user.password,
-    });
+    // const passwordMatch = await bcrypt.compare(password, user.password);
 
-    // Generate a JWT for the authenticated user
-    const token = jwt.sign({ id: user.id, username: user.username }, JWTSecretKey, {
-      expiresIn: '1h', // Token expires in 1 hour
-    });
-    // console.log(jwt.decode(token));
-    // Set the JWT as an HTTP cookie
-    res.cookie('token', token, { httpOnly: true });
-    res.status(200).json({ message: "LOGIN SUCCESSFUL", token });
+    // if (!passwordMatch) {
+    //   res.status(401).json({ error: "✖ INCORRECT PASSWORD" });
+    //   return;
+    // }
+    // await db("login").insert({
+    //   username,
+    //   password: user.password,
+    // });
+    //-------------POSTGRES SQL CODE----------//
+
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "An error occurred during login." });
+    res.status(500).json({ error: "SERVER ERROR!!!" });
   }
 });
 
-// logout route
+// LOG OUT ROUTE
 app.post("/logout", (req, res) => {
   res.clearCookie("token");
-  res.status(200).json({ message: "Logout Successful"})
+  res.status(200).json({ message: "LOGOUT SUCCESSFULL"})
 })
 
-// Route for sending the confirmation email
+//----------------------- DEPRECATED -----------------------//
+
+// ROUTE FOR SENDING CONFIRMATION EMAIL TO RESET PASSWORD
 app.post("/confirmLink", async (req, res) => {
-  // console.log(req.body)
   const { email } = req.body;
-  // console.log(email)
   const expiryTime = Date.now() + 60 * 1000; // Expiry time set to 24 hours from now
-  console.log(expiryTime);
+  
   try {
     const transporter = nodemailer.createTransport({
       service: "Gmail",
@@ -212,20 +283,17 @@ app.post("/confirmLink", async (req, res) => {
     transporter.sendMail(mailOptions, (error, info) => {
       if (error) {
         res.status(404).json({ error: "Email not sent" });
-        console.log(`Error:${error}`);
       } else {
-        console.log(`Email sent: ${info.response}`);
         res.status(200).json({ message: "Confirmation email sent" });
         res.status(201).json({ status: 201, info });
       }
     });
   } catch (error) {
-    console.log(`Error: ${error}`);
     res.status(401).json({ status: 401, error });
   }
 });
 
-// Endpoint to handle password reset request
+// ENDPOINT TO RESET PASSWORD IN DATABASE (POSTGRESQL ONLY, maybe will do it in firebase ) 
 app.post("/reset-password", async (req, res) => {
   const { username, newPassword } = req.body;
 
@@ -248,59 +316,92 @@ app.post("/reset-password", async (req, res) => {
     // Send a success response
     res.json({ message: "Password reset successful." });
   } catch (error) {
-    console.error(error);
     res.status(500).json({ error: "An error occurred during password reset." });
   }
 });
+//----------------------- DEPRECATED -----------------------//
 
-//--------------OWNER_RENTING_THEIR_CAR_ROUTE---------------//
-app.post("/owner-data", upload.array("images", 5), async (req, res) => {
+//--------------OWNER RENTING THEIR CAR ROUTE---------------//
+app.post("/api/owner-data", upload.array("images", 5), async (req, res) => {
   const { carName, price, rent, username } = req.body;
 
   try {
-    // const userID = req.userId;
-
-    // Assuming you have a function to retrieve the user ID from the username
-    const user = await db("register").where({ username }).first();
-    // console.log(user)
-    if (!user) {
-      return res.status(404).json({ error: "User not found." });
-    }
-
-    const imageURLS = await Promise.all(
-      req.files.map(async (file) => {
-        const result = await cloudinary.uploader.upload(file.path);
-        return result.secure_url;
+    //GET "register_user" COLLECTION
+    const registerDB = await getDocs(registerRef);
+    const checkData = registerDB.docs.map(doc => ({ ...doc.data(), 
+        user_name: doc.data().user_name,
       })
     );
 
-    // Convert the array of image URLs to a JSON string
+    const checkUser = checkData.find(user => user.user_name === username);
+    if (!checkUser) {
+      return res.status(404).json({ error: "USER NOT FOUND" });
+    }
+
+    //-------------POSTGRES SQL CODE----------//
+    // Assuming you have a function to retrieve the user ID from the username
+    // const user = await db("register").where({ username }).first();
+    // // console.log(user)
+    // if (!user) {
+    //   return res.status(404).json({ error: "User not found." });
+    // }
+    //-------------POSTGRES SQL CODE----------//
+
+    // UPLOAD IMAGES TO CLOUDINARY
+    const imageURLS = await Promise.all(
+      req.files.map(async (file) => {
+        try {
+          const result = await cloudinary.uploader.upload(file.path);
+          return result.secure_url;
+        } catch (uploadError) {
+          console.error("Cloudinary upload error:", uploadError);
+          throw new Error("Image upload failed");
+        }
+      })
+    );
+
+    // CONVERT THE ARRAY OF IMAGE TO A STRING
     const imageUrlsJson = JSON.stringify(imageURLS);
 
-    await db("car_listings").insert({
-      car_name: carName,
-      price: price,
-      rent: rent,
-      image_url: imageUrlsJson,
-      login_user_name: user.username,
-    });
+    //UPLOAD CAR DATA TO "owners_car_data" COLLECTION
+    await addDoc(ownerDataRef, {
+      owner_car_name: carName,
+      owner_car_price: price,
+      owner_car_rent: rent,
+      owner_image_url: imageUrlsJson,
+      login_user_name: checkUser.user_name,
+    })
 
-    res.status(200).json({ message: "Data saved!" });
+    //-------------POSTGRES SQL CODE----------//
+    // await db("car_listings").insert({
+    //   car_name: carName,
+    //   price: price,
+    //   rent: rent,
+    //   image_url: imageUrlsJson,
+    //   login_user_name: user.username,
+    // });
+    //-------------POSTGRES SQL CODE----------//
+
+    res.status(200).json({ message: "DATA SAVED" });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "An error occurred saving data" });
+    res.status(500).json({ error: "SERVOR ERROR!!!" });
   }
 });
 
+
+//DISPLAY ALL CAR DATA LIST FROM DATABASE
 app.get("/api/car-data", async (req, res) => {
   try {
-    // Fetch all records from the car_listings table
-    const carListings = await db('car_listings').select('*');
-    // console.log('Fetched car listings:', carListings);
+    // -------GET ALL CAR LIST FROM POSGRESQL DATABASE------- //
+      // const carListings = await db('car_listings').select('*');
+    // -------GET ALL CAR LIST FROM POSGRESQL DATABASE------- //
 
-    res.json(carListings);
-  } catch (err) {
-    console.error('Error occurred fetching data:', err);
-    res.status(500).json({ error: 'Error occurred fetching data' });
+    // GET ALL DATA FROM FIREBASE "owners_car_data" COLLECTION
+    const snapshot = await getDocs(ownerDataRef);
+    const carListings = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+
+    res.json(carListings || []);
+  } catch (error) {
+    res.status(500).json({ error: 'SERVER ERROR!!!' });
   }
 });

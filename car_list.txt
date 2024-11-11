@@ -1,0 +1,38 @@
+[
+    {
+        "car_name": "Bugatti Chiron",
+        "car_price": 1000000,
+        "car_img_url": "https://res.cloudinary.com/dttarxcrw/image/upload/v1707298331/t4tnsapsllaeexkponr4.jpg"
+        "car_rent" : "2500"
+    },
+    {
+        "car_name": "AC Shelby Cobra",
+        "car_price": 750000,
+        "car_img_url": "https://res.cloudinary.com/dttarxcrw/image/upload/v1707298360/dkjgqgks1gs0qxlmf2d4.jpg"
+        "car_rent" : "300"
+    },
+    {
+        "car_name": "Dodge Hellcat 2020",
+        "car_price": 450000,
+        "car_img_url": "https://res.cloudinary.com/dttarxcrw/image/upload/v1707298108/hkpaetqnjmips3tsfwht.jpg"
+        "car_rent" : "145"
+    },
+    {
+        "car_name": "Nisson Silvia S15",
+        "car_price": 150000,
+        "car_img_url": "https://res.cloudinary.com/dttarxcrw/image/upload/v1707298154/fuffm3qddhgai6hsvmm1.jpg"
+        "car_rent" : "50"
+    },
+    {
+        "car_name": "Ford Mustang 2022",
+        "car_price": 550000,
+        "car_img_url": "https://res.cloudinary.com/dttarxcrw/image/upload/v1707298557/ejsu3vtisvieclpectiq.jpg"
+        "car_rent" : "450"
+    },
+    {
+        "car_name": "Lamborgini Sian",
+        "car_price": 2550000,
+        "car_img_url": "https://res.cloudinary.com/dttarxcrw/image/upload/v1707298830/ufdfd7h6flqjkw9vmksb.jpg"
+        "car_rent" : "950"
+    }
+]
