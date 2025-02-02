@@ -11,7 +11,8 @@ import { auth } from 'express-openid-connect';
 import dotenv from 'dotenv';
 import authMiddleware from "./authMiddleware.js"
 import { initializeApp } from "firebase/app";
-import { getDocs, getFirestore, collection, addDoc } from 'firebase/firestore';
+import { getDocs, getFirestore, collection, addDoc, query, where, updateDoc } from 'firebase/firestore';
+import admin from "firebase-admin";
 
 dotenv.config();
 
@@ -22,28 +23,31 @@ app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
 });
 
-const JWTSecretKey = process.env.RENDER_AUTH0_SECRET_KEY
+const JWTSecretKey = process.env.AUTH0_SECRET_KEY || process.env.RENDER_AUTH0_SECRET_KEY
 const users = [];
 
 //CLOUDINARY CONFIG
 cloudinary.config({
-  cloud_name: process.env.RENDER_CLOUDINARY_NAME,
-  api_key: process.env.RENDER_CLOUDINARY_API_KEY,
-  api_secret: process.env.RENDER_CLOUDINARY_API_SECRET,
+  cloud_name: process.env.CLOUDINARY_NAME || process.env.RENDER_CLOUDINARY_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY || process.env.RENDER_CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET || process.env.RENDER_CLOUDINARY_API_SECRET,
 });
 
 //FIREBASE DATABASE CONFIG
 const firebaseConfig = {
-  apiKey: process.env.RENDER_FIREBASE_APIKEY,
-  authDomain: process.env.RENDER_FIREBASE_AUTHDOMAIN,
-  projectId: process.env.RENDER_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.RENDER_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.RENDER_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.RENDER_FIREBASE_APP_ID,
-  measurementId: process.env.RENDER_FIREBASE_MEASUREMENT_ID
+  apiKey: process.env.FIREBASE_APIKEY || process.env.RENDER_FIREBASE_APIKEY,
+  authDomain: process.env.FIREBASE_AUTHDOMAIN || process.env.RENDER_FIREBASE_AUTHDOMAIN,
+  projectId: process.env.FIREBASE_PROJECT_ID || process.env.RENDER_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.FIREBASE_STORAGE_BUCKET || process.env.RENDER_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID || process.env.RENDER_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.FIREBASE_APP_ID || process.env.RENDER_FIREBASE_APP_ID,
+  measurementId: process.env.FIREBASE_MEASUREMENT_ID || process.env.RENDER_FIREBASE_MEASUREMENT_ID
 };
 
 initializeApp(firebaseConfig)
+admin.initializeApp({
+  credential: admin.credential.cert(JSON.parse(process.env.FIREBASE_CREDENTIALS || process.env.RENDER_FIREBASE_CREDENTIALS)),
+});
 const firebaseDB = getFirestore();
 //FIREBASE "register_user" COLLECTION
 const registerRef = collection(firebaseDB, 'register_user');
@@ -60,7 +64,7 @@ const ownerDataRef = collection(firebaseDB, 'owners_car_data');
 //     user: process.env.DB_LOCAL_USER,
 //     password: process.env.DB_LOCAL_PASS,
 //     database: process.env.DB_LOCAL_DB,
-//     // ssl: true, 
+//     // ssl: true,
 //     port: process.env.DB_LOCAL_PORT,
 //   },
 // });
@@ -70,22 +74,19 @@ const ownerDataRef = collection(firebaseDB, 'owners_car_data');
 const config = {
   authRequired: false,
   auth0Logout: true,
-  // baseURL: 'http://localhost:3000',
-  baseURL: "https://car-rental-20.vercel.app",
-  clientID: process.env.RENDER_AUTH0_CLIENT_ID,
-  issuerBaseURL: process.env.RENDER_AUTH0_ISSUE_BASE_URL,
-  secret: process.env.RENDER_AUTH0_SECRET_KEY
+  baseURL: process.env.LOCAL_URL || process.env.RENDER_URL,
+  clientID: process.env.AUTH0_CLIENT_ID || process.env.RENDER_AUTH0_CLIENT_ID,
+  issuerBaseURL: process.env.AUTH0_ISSUE_BASE_URL || process.env.RENDER_AUTH0_ISSUE_BASE_URL,
+  secret: process.env.AUTH0_SECRET_KEY || process.env.RENDER_AUTH0_SECRET_KEY
 };
 
 // CORS
-app.use(cors({ 
-  origin: "https://car-rental-20.vercel.app",
-  // origin: "http://localhost:3000",  
+app.use(cors({
+  origin: process.env.LOCAL_URL || process.env.RENDER_URL,
   credentials: true,
 }));
 
 app.use(express.json());
-// MIDDLEWARE TO PARSE JSON BODY
 app.use(cookieParser())
 app.use(auth(config))
 const upload = multer({ dest: "uploads/" });
@@ -106,7 +107,7 @@ const upload = multer({ dest: "uploads/" });
 // });
 //-------------------------------MANUAL CORS-------------------------------//
 
-//--------------PROTECT ROUTE IF LOGIN OR NOT--------------//
+//--------------PROTECT ROUTE(FOR TESTING)--------------//
 
 // PROTECT ROUTES
 app.get("/", (req, res) => {
@@ -120,7 +121,7 @@ app.get('/profile', authMiddleware, (req, res) => {
   // Access the authenticated user's information via req.user
   res.json({ message: `Welcome, ${req.user.username}!` });
 });
-//--------------PROTECT ROUTE IF LOGIN OR NOT--------------//
+//--------------PROTECT ROUTE(FOR TESTING)--------------//
 
 // REGISTER ROUTE
 app.post("/api/register", async (req, res) => {
@@ -162,7 +163,7 @@ app.post("/api/register", async (req, res) => {
     const token = jwt.sign({ id: newUser.id, username: newUser.username }, JWTSecretKey, {
     expiresIn: '1h', // Token expires in 1 hour
     });
-    
+
 //-------------POSTGRES SQL CODE----------//
     // await db("register").insert({
     //   first_name: firstName,
@@ -187,44 +188,6 @@ app.post("/api/login", async (req, res) => {
   const { username, email, password } = req.body;
 
   try {
-    //GET "register_user" COLLECTION
-    const registerDB = await getDocs(registerRef);
-    const checkData = registerDB.docs.map(doc => ({ ...doc.data(), 
-        user_name: doc.data().user_name, 
-        email_address: doc.data().email_address, 
-        user_password: doc.data().user_password 
-      })
-    );
-
-    // CHECK IF USERNAME, EMAIL AND PASSWORD ARE THE SAME AS IN REGISTER COLLECTION
-    const checkUser = checkData.find(user => user.user_name === username);
-    const checkEmail = checkData.find(user => user.email_address === email);
-    const isPasswordValid = await bcrypt.compare(password, checkUser.user_password);
-
-    if (!checkUser) {
-      return res.status(400).json({ error: "INVALID USERNAME" });
-    } else if (!checkEmail) {
-      return res.status(400).json({ error: "INVALID EMAIL" });
-    } else if (!isPasswordValid) {
-      return res.status(400).json({ error: "INVALID PASSWORD" });
-    }
-    
-    for (const user of checkData) {
-      //ADD USER TO "login_account" COLLECTION
-        await addDoc(loginRef, {
-          login_user_name: user.user_name,
-          login_email_address: user.email_address,
-          login_password: user.user_password,
-          login_date: new Date().toISOString(),
-        });
-
-        if (checkUser && checkEmail && isPasswordValid) {
-          // GENERATE A "JWT TOKEN" FOR THE USER
-          const token = jwt.sign({ id: checkUser.id, username: checkUser.user_name }, JWTSecretKey, { expiresIn: '1h' });
-            return res.status(200).json({ message: "LOGIN SUCCESSFULL", token });
-        }
-    }
-
     //-------------POSTGRES SQL CODE----------//
     // const user = await db("register").where({ username }).first();
 
@@ -236,24 +199,103 @@ app.post("/api/login", async (req, res) => {
     // const passwordMatch = await bcrypt.compare(password, user.password);
 
     // if (!passwordMatch) {
-    //   res.status(401).json({ error: "✖ INCORRECT PASSWORD" });
-    //   return;
-    // }
-    // await db("login").insert({
-    //   username,
-    //   password: user.password,
-    // });
+      //   res.status(401).json({ error: "✖ INCORRECT PASSWORD" });
+      //   return;
+      // }
+      // await db("login").insert({
+        //   username,
+        //   password: user.password,
+        // });
     //-------------POSTGRES SQL CODE----------//
 
+    //------------CHECK IF USER EXISTS IN REGISTER DB------------//
+    const registerDB = await getDocs(registerRef);
+    const checkData = registerDB.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+    // Find the user with matching username and email
+    const checkUser = checkData.find(user => user.user_name === username && user.email_address === email);
+
+    // Handle invalid username or email
+    if (!checkUser) {
+      return res.status(400).json({ error: "INVALID USERNAME OR EMAIL" });
+    }
+
+    // Verify the password
+    const isPasswordValid = checkUser.user_password && await bcrypt.compare(password, checkUser.user_password);
+
+    if (!isPasswordValid) {
+      return res.status(400).json({ error: "INVALID PASSWORD" });
+    }
+
+    //------------CHECK IF USER ALREADY LOGGED IN------------//
+    // Query Firestore to find if the user already exists in login DB
+    const loginQuery = query(loginRef, where("login_user_name", "==", username), where("login_email_address", "==", email));
+    const loginDB = await getDocs(loginQuery);
+
+    if (!loginDB.empty) {
+      // User already logged in, update login_date
+      const loginDocRef = loginDB.docs[0].ref;
+      await updateDoc(loginDocRef, { login_date: new Date().toISOString() });
+    } else {
+      // First-time login, add user to "login_account" collection
+      await addDoc(loginRef, {
+        login_user_name: checkUser.user_name,
+        login_email_address: checkUser.email_address,
+        login_date: new Date().toISOString(),
+      });
+    }
+
+    // Generate a JWT token
+    const token = jwt.sign(
+      { id: checkUser.id, username: checkUser.user_name },
+      JWTSecretKey,
+      { expiresIn: "1h" }
+    );
+
+    return res.status(200).json({ message: "LOGIN SUCCESSFUL", token });
   } catch (error) {
+    console.error("Login Error:", error);
     res.status(500).json({ error: "SERVER ERROR!!!" });
+  }
+});
+
+//GOOGLE LOGIN AUTH
+app.post("/api/google-auth", async (req, res) => {
+  const { idToken } = req.body;
+  try {
+    const decodedToken = await admin.auth().verifyIdToken(idToken);
+    const { uid, name, email } = decodedToken;
+
+    const loginQuery = query(loginRef, where("login_user_name", "==", name), where("login_email_address", "==", email));
+    const loginDB = await getDocs(loginQuery);
+
+    if (!loginDB.empty) {
+      // User already logged in, update login_date
+      const loginDocRef = loginDB.docs[0].ref;
+      await updateDoc(loginDocRef, { login_date: new Date().toISOString() });
+    } else {
+      // First-time login, add user to "login_account" collection
+      await addDoc(loginRef, {
+        login_user_name: name || "Unknown User",
+        login_email_address: email || "Unknown Email",
+        login_date: new Date().toISOString(),
+      });
+    }
+
+    res.json({ message: "Authenticated", user: { uid, name } });
+  } catch (error) {
+    res.status(401).json({ error: "Invalid token" });
   }
 });
 
 // LOG OUT ROUTE
 app.post("/logout", (req, res) => {
-  res.clearCookie("token");
-  res.status(200).json({ message: "LOGOUT SUCCESSFULL"})
+  try {
+    res.clearCookie("token");
+    res.status(200).json({ message: "LOGOUT SUCCESSFULL"})
+  } catch (error) {
+    res.status(500).json({ error: "SERVER ERROR!!!" });
+  }
 })
 
 //----------------------- DEPRECATED -----------------------//
@@ -327,13 +369,13 @@ app.post("/api/owner-data", upload.array("images", 5), async (req, res) => {
 
   try {
     //GET "register_user" COLLECTION
-    const registerDB = await getDocs(registerRef);
-    const checkData = registerDB.docs.map(doc => ({ ...doc.data(), 
-        user_name: doc.data().user_name,
+    const loginDB = await getDocs(loginRef);
+    const checkData = loginDB.docs.map(doc => ({ ...doc.data(),
+      login_user_name: doc.data().login_user_name,
       })
     );
 
-    const checkUser = checkData.find(user => user.user_name === username);
+    const checkUser = checkData.find(user => user.login_user_name === username);
     if (!checkUser) {
       return res.status(404).json({ error: "USER NOT FOUND" });
     }
@@ -369,7 +411,7 @@ app.post("/api/owner-data", upload.array("images", 5), async (req, res) => {
       owner_car_price: price,
       owner_car_rent: rent,
       owner_image_url: imageUrlsJson,
-      login_user_name: checkUser.user_name,
+      login_user_name: checkUser.login_user_name,
     })
 
     //-------------POSTGRES SQL CODE----------//
@@ -397,8 +439,8 @@ app.get("/api/car-data", async (req, res) => {
     // -------GET ALL CAR LIST FROM POSGRESQL DATABASE------- //
 
     // GET ALL DATA FROM FIREBASE "owners_car_data" COLLECTION
-    const snapshot = await getDocs(ownerDataRef);
-    const carListings = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+    const getCarData = await getDocs(ownerDataRef);
+    const carListings = getCarData.docs.map(doc => ({ ...doc.data(), id: doc.id }));
 
     res.json(carListings || []);
   } catch (error) {
